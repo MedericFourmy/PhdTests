@@ -11,6 +11,27 @@ import matplotlib.pyplot as plt
 from wolf_preint import *
 
 
+# Define foot contacts to compute wrench from corner forces
+lxp = 0.1                           # foot length in positive x direction
+lxn = 0.1                           # foot length in negative x direction
+lyp = 0.065                         # foot length in positive y direction
+lyn = 0.065                         # foot length in negative y direction
+lz = 0.107                          # foot sole height with respect to ankle joint
+
+contact_Point = np.ones((3,4))
+contact_Point[0, :] = [-lxn, -lxn, lxp, lxp]
+contact_Point[1, :] = [-lyn, lyp, -lyn, lyp]
+contact_Point[2, :] = 4*[-lz]
+
+def f12TOphi(f12,points=contact_Point):
+    phi = pin.Force.Zero()
+    for i in range(4):
+        phii = pin.Force(f12[i*3:i*3+3],np.zeros(3))
+        fMi = pin.SE3(np.eye(3),points[:,i])
+        phi += fMi.act(phii)
+    return phi
+
+
 
 
 examples_dir = ''
@@ -55,26 +76,6 @@ rmodel = robot.model
 rdata = robot.data
 contact_frame_ids = [rmodel.getFrameId(l) for l in contact_frames]
 print(contact_frame_ids)
-
-# Define foot contacts to compute wrench from corner forces
-lxp = 0.1                           # foot length in positive x direction
-lxn = 0.1                           # foot length in negative x direction
-lyp = 0.065                         # foot length in positive y direction
-lyn = 0.065                         # foot length in negative y direction
-lz = 0.107                          # foot sole height with respect to ankle joint
-
-contact_Point = np.ones((3,4))
-contact_Point[0, :] = [-lxn, -lxn, lxp, lxp]
-contact_Point[1, :] = [-lyn, lyp, -lyn, lyp]
-contact_Point[2, :] = 4*[-lz]
-
-def f12TOphi(f12,points=contact_Point):
-    phi = pin.Force.Zero()
-    for i in range(4):
-        phii = pin.Force(f12[i*3:i*3+3],np.zeros(3))
-        fMi = pin.SE3(np.eye(3),points[:,i])
-        phi += fMi.act(phii)
-    return phi
 
 
 # initialize 

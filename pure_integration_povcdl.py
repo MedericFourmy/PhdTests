@@ -8,6 +8,8 @@ import curves
 from multicontact_api import ContactSequence
 import matplotlib.pyplot as plt
 
+from wolf_preint import *
+
 
 lxp = 0.1                           # foot length in positive x direction
 lxn = 0.1                           # foot length in negative x direction
@@ -82,6 +84,11 @@ c_est_lst = [c_arr[0,:]]
 dc_est_lst = [dc_arr[0,:]]
 Lc_est_lst = [Lc_arr[0,:]]
 
+p_ori = q_arr[0,0:3]
+v_ori = oRb @ dq_arr[0,0:3]
+oRb_ori = oRb.copy()
+x_imu_ori = p_ori, v_ori, oRb_ori
+
 p_gtr_lst = [q_arr[0,0:3]]
 oRb_gtr_lst = [oRb]
 v_gtr_lst = [oRb @ dq_arr[0,0:3]]
@@ -94,6 +101,14 @@ gravity = np.array([0,0,-9.81])
 robot.com(robot.q0)
 mass = rdata.mass[0] 
 print('mass talos: ', mass)
+
+# Preintegration
+DeltaIMU = [
+    np.zeros(3),
+    np.zeros(3),
+    np.eye(3)
+]
+Deltat = 0
 
 for i in range(1,N):
     #############
@@ -109,10 +124,11 @@ for i in range(1,N):
     Lc_gtr_lst.append(Lc_arr[i,:])
 
     # IMU
-    b_v = dq_arr[i,0:3]
-    b_w = dq_arr[i,3:6]
-    b_asp = ddq_arr[i,0:3]
+    b_v = dq_arr[i-1,0:3]
+    b_w = dq_arr[i-1,3:6]
+    b_asp = ddq_arr[i-1,0:3]
     b_acc = b_asp + np.cross(b_w, b_v)
+    b_proper_acc = b_acc - oRb_gtr_lst[-2].T @ gravity
 
     # FT
     l_F = l_wrench_lst[i]
@@ -129,21 +145,23 @@ for i in range(1,N):
     bRr = bTr.rotation
     b_p_bc = robot.com(q_static)
 
+    ##############
+    # preintegration
+    #############
+    Deltat += dt
+    deltak = compute_current_delta_IMU(b_proper_acc, b_w, dt)
+    DeltaIMU = compose_delta_IMU(DeltaIMU, deltak, dt)
+    p_int, v_int, oRb_int = state_plus_delta_IMU(x_imu_ori, DeltaIMU, Deltat)
+
     #############
     # integrate one step IMU and wrench measurements
     #############
-    # IMU
-    p_int = p_est_lst[-1] + v_est_lst[-1]*dt +  0.5*oRb_est_lst[-1] @ b_acc*dt**2
-    v_int = v_est_lst[-1] + oRb_est_lst[-1] @ b_acc*dt
-    oRb_int = oRb_est_lst[-1] @ pin.exp3(b_w*dt)
-    
-    # FT
-    # c_tot_force = oRb_int @ bTl.rotation @ l_F.linear + bTr.rotation @ r_F.linear
-    # c_tot_centr_mom = oRb_int @ (
-    #     bTl.rotation @ l_F.angular + bTr.rotation @ r_F.angular + 
-    #     np.cross(b_p_bl - b_p_bc, bRl @ l_F.linear) + np.cross(b_p_br - b_p_bc, bRr @ r_F.linear)
-    # )
+    # # IMU
+    # p_int = p_est_lst[-1] + v_est_lst[-1]*dt +  0.5*oRb_est_lst[-1] @ b_acc*dt**2
+    # v_int = v_est_lst[-1] + oRb_est_lst[-1] @ b_acc*dt
+    # oRb_int = oRb_est_lst[-1] @ pin.exp3(b_w*dt)
 
+    # FT
     cTl = pin.SE3(oRb_int@bRl, oRb_int@(b_p_bl - b_p_bc))
     cTr = pin.SE3(oRb_int@bRr, oRb_int@(b_p_br - b_p_bc))
 
@@ -151,12 +169,12 @@ for i in range(1,N):
     c_tot_force = c_tot_wrench.linear
     c_tot_centr_mom = c_tot_wrench.angular
 
-
     c_int = c_est_lst[-1] + dc_est_lst[-1]*dt + 0.5 * (c_tot_force/mass + gravity) * dt**2
     dc_int = dc_est_lst[-1] + (c_tot_force/mass + gravity) * dt
     Lc_int = Lc_est_lst[-1] + (c_tot_centr_mom/mass) * dt
 
 
+    # Store estimation
     p_est_lst.append(p_int)
     oRb_est_lst.append(oRb_int)
     v_est_lst.append(v_int)

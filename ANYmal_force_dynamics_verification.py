@@ -8,7 +8,7 @@ import pinocchio as pin
 from example_robot_data import loadANYmal
 import curves
 from multicontact_api import ContactSequence
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt; plt.ion()
 
 DISPLAY_TRAJ = False
 examples_dir = ''

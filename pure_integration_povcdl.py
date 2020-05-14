@@ -6,8 +6,8 @@ import pinocchio as pin
 from example_robot_data import loadTalos
 import curves
 from multicontact_api import ContactSequence
-import matplotlib.pyplot as plt
-
+import matplotlib.pyplot as plt; plt.ion()
+from numpy.linalg import norm,inv,pinv,eig,svd
 from wolf_preint import *
 
 
@@ -156,6 +156,9 @@ for i in range(1,N):
     DeltaIMU = compose_delta_IMU(DeltaIMU, deltak, dt)
     p_int, v_int, oRb_int = state_plus_delta_IMU(x_imu_ori, DeltaIMU, Deltat)
 
+    #if not i % 100: print(np.linalg.norm(v_int - oRb_gtr_lst[-2] @ b_v))
+    print(norm(b_w))
+    if i>1: stophere
     #############
     # integrate one step IMU and wrench measurements
     #############

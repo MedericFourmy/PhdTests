@@ -5,7 +5,8 @@ import numpy as np
 import curves
 from example_robot_data import loadTalos
 from multicontact_api import ContactSequence
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt; plt.ion()
+from numpy.linalg import norm,inv,pinv,eig,svd
 
 from wolf_preint import *
 
@@ -13,14 +14,14 @@ from wolf_preint import *
 examples_dir = ''
 # file_name = 'sinY_nomove.cs'
 # file_name = 'sinY_waist.cs'
-# file_name = 'sinY_nowaist.cs'
+file_name = 'sinY_nowaist.cs'
 
 # file_name = 'sinY_nomove_new.cs'
 # file_name = 'sinY_waist_new.cs'
 # file_name = 'sinY_nowaist_new.cs'
 
 # file_name = 'sinY_nomove_kp2000.cs'
-file_name = 'sinY_waist_kp2000.cs'
+# file_name = 'sinY_waist_kp2000.cs'
 # file_name = 'sinY_nowaist_kp2000.cs'
 
 cs = ContactSequence()
@@ -95,7 +96,13 @@ DeltaIMU = [
 ]
 Deltat = 0
 
-for i in range(1,N):
+cur_nu_int = pin.Motion.Zero()
+o_M_cur = pin.SE3.Identity()
+
+q_int = q_arr[0,:].copy()
+dq_int = dq_arr[0,:].copy()
+
+for i in range(0,N):
 
     p_gtr_lst.append(q_arr[i,0:3])
     o_q_b = q_arr[i,3:7]
@@ -110,6 +117,9 @@ for i in range(1,N):
     b_acc = b_asp + np.cross(b_w, b_v)
     b_proper_acc = b_acc - oRb.T @ gravity
 
+
+    
+    
     ################
     # preintegration
     ################
@@ -125,6 +135,26 @@ for i in range(1,N):
     v_int = v_int + oRb_int @ b_acc*dt
     oRb_int = oRb_int @ pin.exp(b_w*dt)
 
+
+    ### INT IN SE3
+    
+    cur_nu_int += pin.Motion(ddq_arr[i,:6] * dt)
+    cur_M_next = pin.exp6(cur_nu_int * dt)
+    o_M_cur  = o_M_cur * cur_M_next
+    ###cur_nu_int = cur_M_next.inverse().act(cur_nu_int)
+
+    #dq_int += ddq_arr[i,:]*dt
+    #q_int = pin.integrate(robot.model,q_int,dq_int*dt)
+
+    dq_int += ddq_arr[i,:]*dt/2
+    q_int = pin.integrate(robot.model,q_int,dq_int*dt)
+    dq_int += ddq_arr[i,:]*dt/2
+
+    #dq_mean = dq_int + 0.5*dt*ddq_arr[i,:]
+    #dq_int += dt*ddq_arr[i,:]
+    #q_int = pin.integrate(robot.model, q_int, dt*dq_mean)
+
+    
     # integrate one step using pinocchio, propagate only configuration with configuration velocity from ground truth
     # q_int = pin.integrate(rmodel, q_int, dq_arr[i,:]*dt)
     # p_int = q_int[0:3]
